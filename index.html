@@ -55,6 +55,8 @@
 
 html, body {
   height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -85,7 +87,7 @@ button { font-family: inherit; cursor: pointer; }
   display: grid;
   grid-template-columns: 272px 1fr;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -243,6 +245,8 @@ button { font-family: inherit; cursor: pointer; }
   border: none;
   background: transparent;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
   text-align: left;
   transition: background .12s var(--ease-out);
 }
@@ -253,13 +257,15 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 9px;
+  width: 100%;
+  min-width: 0;
 }
 .chapter-roman {
   font-size: 10px;
   font-weight: 700;
   color: var(--accent-ink);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: rgba(139,124,240,0.16);
+  border: 1px solid rgba(139,124,240,0.26);
   border-radius: 6px;
   padding: 2px 5px;
   min-width: 22px;
@@ -363,6 +369,10 @@ button { font-family: inherit; cursor: pointer; }
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   margin-bottom: 36px;
+  min-width: 0;
+}
+.stat-grid > * {
+  min-width: 0;
 }
 .stat-card {
   background: var(--surface-gradient);
@@ -404,6 +414,10 @@ button { font-family: inherit; cursor: pointer; }
   grid-template-columns: 1.3fr 1fr;
   gap: 20px;
   align-items: start;
+  min-width: 0;
+}
+.dash-grid > * {
+  min-width: 0;
 }
 
 .panel {
@@ -440,6 +454,7 @@ button { font-family: inherit; cursor: pointer; }
   background: none;
   border-left: none; border-right: none; border-top: none;
   width: 100%;
+  min-width: 0;
   text-align: left;
 }
 .chapter-row:last-child { border-bottom: none; }
@@ -619,18 +634,16 @@ button { font-family: inherit; cursor: pointer; }
    FLASHCARD
    ============================================================ */
 .card-stage {
-  perspective: 1800px;
   margin-bottom: 26px;
 }
 .flashcard {
   position: relative;
   min-height: 340px;
   width: 100%;
-  transform-style: preserve-3d;
   cursor: pointer;
-  will-change: transform;
+  overflow: hidden;
+  transition: height .28s var(--ease-out);
 }
-.flashcard.flipped { transform: rotateY(180deg); }
 
 .flashcard.entering {
   animation: cardEnter .42s var(--ease-out) both;
@@ -639,29 +652,12 @@ button { font-family: inherit; cursor: pointer; }
   from { opacity: 0; transform: translateY(14px) scale(.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.flashcard.entering.flipped {
-  animation: none;
-}
-
-@keyframes flipToBack {
-  0%   { transform: rotateY(0deg) scale(1); filter: drop-shadow(0 0 0 rgba(139,124,240,0)); }
-  45%  { transform: rotateY(94deg) scale(1.045); filter: drop-shadow(0 0 30px rgba(139,124,240,0.5)); }
-  100% { transform: rotateY(180deg) scale(1); filter: drop-shadow(0 0 0 rgba(139,124,240,0)); }
-}
-@keyframes flipToFront {
-  0%   { transform: rotateY(180deg) scale(1); filter: drop-shadow(0 0 0 rgba(139,124,240,0)); }
-  45%  { transform: rotateY(86deg) scale(1.045); filter: drop-shadow(0 0 30px rgba(139,124,240,0.5)); }
-  100% { transform: rotateY(0deg) scale(1); filter: drop-shadow(0 0 0 rgba(139,124,240,0)); }
-}
-/* these two rules are declared last on purpose: equal-specificity cascade
-   must resolve in favor of the flip gesture over any lingering entrance class */
-.flashcard.flip-anim-to-back { animation: flipToBack .64s cubic-bezier(0.65,0,0.35,1) both; }
-.flashcard.flip-anim-to-front { animation: flipToFront .64s cubic-bezier(0.65,0,0.35,1) both; }
 
 .card-face {
   position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
+  top: 0;
+  left: 0;
+  right: 0;
   border-radius: var(--radius-xl);
   border: 1px solid var(--border);
   background: var(--surface-gradient);
@@ -669,22 +665,25 @@ button { font-family: inherit; cursor: pointer; }
   padding: 34px 38px;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease-out, box-shadow .25s var(--ease-out);
 }
-.card-face::-webkit-scrollbar { width: 6px; }
-.card-face::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .card-front {
   background: var(--surface-gradient);
+  opacity: 1;
+  pointer-events: auto;
 }
 .card-back {
-  transform: rotateY(180deg);
   background:
     linear-gradient(155deg, rgba(139,124,240,0.20) 0%, rgba(185,140,230,0.08) 40%, rgba(10,10,14,0.2) 100%),
     var(--surface-gradient);
   border-color: rgba(139,124,240,0.28);
   box-shadow: var(--shadow-card), 0 0 40px rgba(139,124,240,0.08);
 }
+.flashcard.flipped .card-front { opacity: 0; pointer-events: none; }
+.flashcard.flipped .card-back { opacity: 1; pointer-events: auto; }
 
 .card-meta-row {
   display: flex;
@@ -1023,7 +1022,7 @@ button { font-family: inherit; cursor: pointer; }
 .sidebar-close-btn { display: none; }
 
 @media (max-width: 900px) {
-  html, body { overflow: visible; height: auto; }
+  html, body { overflow-x: hidden; overflow-y: visible; height: auto; }
   .app { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
 
   .mobile-topbar {
@@ -1198,9 +1197,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .flashcard.entering-next { animation: slideInFromRight .38s var(--ease-out) both; }
 .flashcard.entering-prev { animation: slideInFromLeft .38s var(--ease-out) both; }
-.flashcard.entering-next.flipped, .flashcard.entering-prev.flipped { animation: none; }
-.flashcard:not(.flipped):hover .card-front { box-shadow: var(--shadow-lg); }
-.card-face { transition: box-shadow .25s var(--ease-out); }
+.flashcard:hover .card-front { box-shadow: var(--shadow-lg); }
 
 /* favorite star pop */
 @keyframes popScale {
@@ -1250,6 +1247,7 @@ button { font-family: inherit; cursor: pointer; }
   align-items: center;
   gap: 14px;
   width: 100%;
+  min-width: 0;
   text-align: left;
   background: var(--surface-gradient);
   border: 1px solid var(--border);
@@ -1761,22 +1759,21 @@ button { font-family: inherit; cursor: pointer; }
     }
   }
 
+  function syncCardHeight() {
+    const el = document.getElementById('flashcard');
+    if (!el) return;
+    const activeFace = el.querySelector(state.flipped ? '.card-back' : '.card-front');
+    if (!activeFace) return;
+    const target = Math.max(activeFace.scrollHeight, 340);
+    el.style.height = target + 'px';
+  }
+
   function toggleFlip() {
     const el = document.getElementById('flashcard');
     if (!el) return;
-    const goingToBack = !state.flipped;
-    state.flipped = goingToBack;
-
-    el.classList.remove('entering', 'entering-next', 'entering-prev', 'flip-anim-to-back', 'flip-anim-to-front');
-    void el.offsetWidth;
-    el.classList.add(goingToBack ? 'flip-anim-to-back' : 'flip-anim-to-front');
-
-    const onEnd = function () {
-      el.classList.remove('flip-anim-to-back', 'flip-anim-to-front');
-      el.classList.toggle('flipped', state.flipped);
-      el.removeEventListener('animationend', onEnd);
-    };
-    el.addEventListener('animationend', onEnd);
+    state.flipped = !state.flipped;
+    el.classList.toggle('flipped', state.flipped);
+    syncCardHeight();
 
     const flipIcon = document.getElementById('flipBtnIcon');
     if (flipIcon) flipIcon.classList.toggle('spun', state.flipped);
@@ -1790,6 +1787,7 @@ button { font-family: inherit; cursor: pointer; }
     const open = body.style.display !== 'block';
     body.style.display = open ? 'block' : 'none';
     if (chev) chev.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+    syncCardHeight();
   }
 
   /* ============================================================
@@ -2137,6 +2135,8 @@ button { font-family: inherit; cursor: pointer; }
     const gnt = document.getElementById('groupNoteToggleBtn');
     if (gnt) gnt.addEventListener('click', function (e) { e.stopPropagation(); toggleGroupNote(); });
 
+    syncCardHeight();
+
     lastCardId = id;
     updateGradeEnabledState();
     updateGradeActiveState();
@@ -2397,6 +2397,14 @@ button { font-family: inherit; cursor: pointer; }
       if (isMobileLayout()) closeMobileSidebar();
       openChapter(btn.getAttribute('data-open-chapter'));
     }
+  });
+
+  let resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (state.view === 'study') syncCardHeight();
+    }, 120);
   });
 
   /* ============================================================
