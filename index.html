@@ -746,6 +746,50 @@ button { font-family: inherit; cursor: pointer; }
   gap: 6px;
 }
 
+.option-select-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.option-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .16s var(--ease-spring), background .18s var(--ease-out),
+              border-color .18s var(--ease-out), color .18s var(--ease-out);
+}
+.option-btn:not([disabled]):hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  transform: translateY(-2px);
+}
+.option-btn:not([disabled]):active { transform: scale(0.94); }
+.option-btn.selected {
+  background: linear-gradient(135deg, #7a68e8, #a06fd6);
+  border-color: transparent;
+  color: #fff;
+}
+.option-btn[disabled] { cursor: default; }
+.option-btn.result.correct {
+  background: var(--success-wash);
+  border-color: var(--success);
+  color: var(--success);
+}
+.option-btn.result.wrong {
+  background: var(--danger-wash);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .card-answer-block { flex: 1; }
 .answer-badge {
   display: inline-flex;
@@ -1415,6 +1459,20 @@ button { font-family: inherit; cursor: pointer; }
     return d.innerHTML;
   }
 
+  function getQuickSelectLetters(card) {
+    if (!card || !card.question) return [];
+    if (card.question.indexOf(' — ') !== -1) return []; // compound double-question, skip
+    if (!card.answerLetters || card.answerLetters.indexOf('/') !== -1) return [];
+    const re = /\(([a-e])\)/g;
+    const seen = {};
+    const letters = [];
+    let m;
+    while ((m = re.exec(card.question)) !== null) {
+      if (!seen[m[1]]) { seen[m[1]] = true; letters.push(m[1]); }
+    }
+    return letters.length >= 2 ? letters : [];
+  }
+
   function withTransition(fn) {
     if (document.startViewTransition) {
       document.startViewTransition(fn);
@@ -1521,6 +1579,7 @@ button { font-family: inherit; cursor: pointer; }
     baseOrder: [],
     activeIndex: 0,
     flipped: false,
+    selectedOption: null,
   };
   let lastCardId = null;
 
@@ -1713,25 +1772,29 @@ button { font-family: inherit; cursor: pointer; }
     const idsBefore = getActiveIds();
     const currentId = idsBefore[state.activeIndex];
     if (!currentId) return;
+
+    const cb = document.getElementById('gradeCorrectBtn');
+    const wb = document.getElementById('gradeWrongBtn');
+    if ((cb && cb.disabled) || (wb && wb.disabled)) return; // already processing this grade, ignore repeat clicks
+    if (cb) cb.disabled = true;
+    if (wb) wb.disabled = true;
+
     const nextIdBefore = idsBefore[state.activeIndex + 1];
-    const prevStatus = getProg(currentId).status;
-    const newStatus = prevStatus === status ? null : status;
-    setProg(currentId, { status: newStatus });
+    setProg(currentId, { status: status });
 
     const btn = document.getElementById(status === 'correct' ? 'gradeCorrectBtn' : 'gradeWrongBtn');
     if (btn) { btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse'); }
     document.querySelectorAll('.card-face').forEach(function (f) {
       f.classList.remove('flash-good', 'flash-bad');
-      if (newStatus) { void f.offsetWidth; f.classList.add(newStatus === 'correct' ? 'flash-good' : 'flash-bad'); }
+      void f.offsetWidth;
+      f.classList.add(status === 'correct' ? 'flash-good' : 'flash-bad');
     });
 
-    if (newStatus === 'correct') showToast('Segnata come corretta \u2713');
-    else if (newStatus === 'wrong') showToast('Segnata come sbagliata \u2014 la rivedrai');
-    else showToast('Valutazione rimossa');
+    showToast(status === 'correct' ? 'Segnata come corretta \u2713' : 'Segnata come sbagliata \u2014 la rivedrai');
 
     updateGradeActiveState();
     updateChrome();
-    if (newStatus === 'correct') checkChapterCompletion(currentId);
+    if (status === 'correct') checkChapterCompletion(currentId);
 
     setTimeout(function () { advanceAfterUpdate(nextIdBefore); }, 240);
   }
@@ -2072,7 +2135,10 @@ button { font-family: inherit; cursor: pointer; }
 
     const prog = getProg(id);
     const isNewCard = (id !== lastCardId);
-    if (isNewCard) state.flipped = false;
+    if (isNewCard) {
+      state.flipped = false;
+      state.selectedOption = null;
+    }
 
     const diffClass = difficultyPillClass(card.difficulty);
     const hasAnswer = !!card.answerLetters;
@@ -2094,6 +2160,33 @@ button { font-family: inherit; cursor: pointer; }
       noteHtml = '<div class="answer-note">' + escapeHtml(card.groupNote) + '</div>';
     }
 
+    const quickLetters = getQuickSelectLetters(card);
+    const correctLetter = hasAnswer ? card.answerLetters.split('/')[0].trim().toLowerCase() : '';
+
+    let frontOptionsHtml = '';
+    let backOptionsHtml = '';
+    if (quickLetters.length) {
+      frontOptionsHtml = '<div class="option-select-row">' +
+        quickLetters.map(function (l) {
+          const sel = state.selectedOption === l ? ' selected' : '';
+          const dis = state.selectedOption ? ' disabled' : '';
+          return '<button class="option-btn' + sel + '" data-letter="' + l + '"' + dis + '>' + l.toUpperCase() + '</button>';
+        }).join('') +
+        '</div>';
+      backOptionsHtml = '<div class="option-select-row result">' +
+        quickLetters.map(function (l) {
+          let cls = 'option-btn result';
+          if (l === correctLetter) cls += ' correct';
+          else if (l === state.selectedOption) cls += ' wrong';
+          return '<button class="' + cls + '" disabled data-letter="' + l + '">' + l.toUpperCase() + '</button>';
+        }).join('') +
+        '</div>';
+    }
+
+    const hintText = quickLetters.length
+      ? 'Scegli una risposta, clicca la card o premi Spazio'
+      : 'Clicca la card o premi Spazio per vedere la risposta';
+
     let animClass = '';
     if (isNewCard) {
       if (direction === 'next') animClass = ' entering-next';
@@ -2110,7 +2203,8 @@ button { font-family: inherit; cursor: pointer; }
           '<button class="card-star-btn' + (prog.favorite ? ' active' : '') + '" id="starBtnFront" title="Preferita">' + icon('star', 18) + '</button>' +
         '</div>' +
         '<div class="card-question"><span class="qnum-badge">' + escapeHtml(card.qnum) + '</span>' + escapeHtml(card.question) + '</div>' +
-        '<div class="card-hint">' + icon('sparkle', 12) + ' Clicca la card o premi Spazio per vedere la risposta</div>' +
+        frontOptionsHtml +
+        '<div class="card-hint">' + icon('sparkle', 12) + ' ' + hintText + '</div>' +
       '</div>' +
       '<div class="card-face card-back">' +
         '<div class="card-meta-row">' +
@@ -2119,27 +2213,72 @@ button { font-family: inherit; cursor: pointer; }
         '</div>' +
         '<div class="card-answer-block">' +
           (hasAnswer ? '<div class="answer-badge"><span class="letter">' + escapeHtml(card.answerLetters.split('/')[0].trim().toUpperCase()) + '</span> Risposta corretta</div>' : '') +
+          backOptionsHtml +
           noteHtml +
           toggleHtml +
         '</div>' +
       '</div>';
 
-    el.addEventListener('click', function (e) {
-      if (e.target.closest('.card-star-btn') || e.target.closest('.group-note-toggle')) return;
-      toggleFlip();
-    });
-    const sf = document.getElementById('starBtnFront');
-    const sb = document.getElementById('starBtnBack');
-    if (sf) sf.addEventListener('click', function (e) { e.stopPropagation(); toggleFavoriteCurrent(); });
-    if (sb) sb.addEventListener('click', function (e) { e.stopPropagation(); toggleFavoriteCurrent(); });
-    const gnt = document.getElementById('groupNoteToggleBtn');
-    if (gnt) gnt.addEventListener('click', function (e) { e.stopPropagation(); toggleGroupNote(); });
+    // Single delegated handler assigned via property (not addEventListener) so it
+    // always replaces any previous handler instead of stacking on repeated renders.
+    el.onclick = handleFlashcardClick;
 
     syncCardHeight();
 
     lastCardId = id;
+    const gcb = document.getElementById('gradeCorrectBtn');
+    const gwb = document.getElementById('gradeWrongBtn');
+    if (gcb) gcb.disabled = false;
+    if (gwb) gwb.disabled = false;
     updateGradeEnabledState();
     updateGradeActiveState();
+  }
+
+  function handleFlashcardClick(e) {
+    const optBtn = e.target.closest('.option-btn:not([disabled])');
+    if (optBtn) {
+      selectOption(optBtn.getAttribute('data-letter'));
+      return;
+    }
+    if (e.target.closest('.card-star-btn')) {
+      toggleFavoriteCurrent();
+      return;
+    }
+    if (e.target.closest('.group-note-toggle')) {
+      toggleGroupNote();
+      return;
+    }
+    toggleFlip();
+  }
+
+  function selectOption(letter) {
+    if (state.flipped || state.selectedOption) return;
+    const ids = getActiveIds();
+    const cardId = ids[state.activeIndex];
+    const card = CARD_BY_ID[cardId];
+    if (!card) return;
+
+    state.selectedOption = letter;
+    const correctLetter = (card.answerLetters || '').split('/')[0].trim().toLowerCase();
+    const isCorrect = letter === correctLetter;
+
+    document.querySelectorAll('.card-front .option-btn').forEach(function (b) {
+      b.setAttribute('disabled', 'disabled');
+      b.classList.toggle('selected', b.getAttribute('data-letter') === letter);
+    });
+    const backBtn = document.querySelector('.card-back .option-btn[data-letter="' + letter + '"]');
+    if (backBtn && !isCorrect) backBtn.classList.add('wrong');
+
+    // Answering IS grading: record progress immediately and reliably, no separate
+    // manual step required. The Corretta/Sbagliata buttons remain available to
+    // override afterward if needed.
+    setProg(cardId, { status: isCorrect ? 'correct' : 'wrong' });
+    updateGradeActiveState();
+    updateChrome();
+    if (isCorrect) checkChapterCompletion(cardId);
+    showToast(isCorrect ? 'Corretta \u2713' : 'Sbagliata \u2014 la rivedrai');
+
+    toggleFlip();
   }
 
   function updateGradeEnabledState() {
@@ -2376,6 +2515,11 @@ button { font-family: inherit; cursor: pointer; }
     else if (e.key === '1') { gradeCurrent('correct'); }
     else if (e.key === '2') { gradeCurrent('wrong'); }
     else if (e.key === 'f' || e.key === 'F') { toggleFavoriteCurrent(); }
+    else if (/^[a-cA-C]$/.test(e.key)) {
+      const letter = e.key.toLowerCase();
+      const btn = document.querySelector('.card-front .option-btn[data-letter="' + letter + '"]:not([disabled])');
+      if (btn) selectOption(letter);
+    }
     else if (e.key === 'Escape') { goDashboard(); }
   });
 
